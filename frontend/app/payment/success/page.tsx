@@ -1,59 +1,68 @@
-// src/app/checkout/success/page.tsx
-"use client";
+"use client"; // حتما در ابتدای فایل باشد
 
+import { useEffect } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 
-export default function CheckoutSuccessPage() {
+export default function PaymentSuccessPage() {
   const searchParams = useSearchParams();
-  const orderNumber = searchParams.get("orderNumber");
   const orderId = searchParams.get("orderId");
+  const refId = searchParams.get("refId");
+
+  useEffect(() => {
+    // پاک کردن سبد خرید از حافظه مرورگر بلافاصله پس از لود صفحه موفقیت
+    localStorage.removeItem("cart");
+    // اگر از Event برای آپدیت هدر استفاده می‌کنید، آن را هم صدا بزنید
+    window.dispatchEvent(new Event("cart-updated"));
+  }, []);
 
   return (
-    <div className="container mx-auto max-w-lg px-4 py-20 text-center">
-      <div className="mx-auto flex h-20 w-20 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 mb-6">
+    <div
+      className="max-w-md mx-auto my-20 p-8 bg-white rounded-3xl shadow-lg text-center"
+      dir="rtl"
+    >
+      <div className="w-20 h-20 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-6">
         <svg
-          xmlns="http://www.w3.org/2000/svg"
-          className="h-10 w-10"
+          className="w-10 h-10"
           fill="none"
-          viewBox="0 0 24 24"
           stroke="currentColor"
+          viewBox="0 0 24 24"
         >
           <path
             strokeLinecap="round"
             strokeLinejoin="round"
-            strokeWidth={2.5}
+            strokeWidth="2"
             d="M5 13l4 4L19 7"
           />
         </svg>
       </div>
-
-      <h1 className="text-2xl font-black text-gray-900">
-        سفارش شما با موفقیت ثبت شد!
+      <h1 className="text-2xl font-bold text-gray-900 mb-2">
+        پرداخت با موفقیت انجام شد
       </h1>
-      <p className="mt-2 text-sm text-gray-600">کد رهگیری و شماره سفارش شما:</p>
-
-      <div className="my-4 inline-block rounded-xl bg-gray-100 px-6 py-2.5 font-mono text-lg font-bold text-emerald-800 tracking-wider">
-        {orderNumber || "---"}
-      </div>
-
-      <p className="text-xs text-gray-500 leading-relaxed">
-        سفارش شما جهت بسته‌بندی و ارسال به انبار تحویل داده شد. وضعیت سفارش را
-        می‌توانید از بخش پروفایل پیگیری کنید.
+      <p className="text-gray-500 mb-6 text-sm">
+        سفارش شما با شماره{" "}
+        <span className="font-bold text-gray-800">{orderId}</span> ثبت شد.
       </p>
 
-      <div className="mt-8 flex flex-col sm:flex-row gap-3 justify-center">
+      <div className="bg-gray-50 p-4 rounded-2xl mb-8 text-right">
+        <div className="flex justify-between text-sm mb-1">
+          <span className="text-gray-400">کد رهگیری بانکی:</span>
+          <span className="font-mono font-bold text-gray-700">{refId}</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
         <Link
-          href="/"
-          className="rounded-xl border border-gray-200 bg-white px-6 py-2.5 text-sm font-semibold text-gray-700 hover:bg-gray-50 transition"
+          href="/orders"
+          className="bg-emerald-600 text-white px-4 py-3 rounded-xl font-medium hover:bg-emerald-700 transition"
         >
-          بازگشت به فروشگاه
+          سفارش‌های من
         </Link>
         <Link
-          href="/profile/orders"
-          className="rounded-xl bg-emerald-600 px-6 py-2.5 text-sm font-semibold text-white shadow hover:bg-emerald-700 transition"
+          href="/"
+          className="bg-gray-100 text-gray-700 px-4 py-3 rounded-xl font-medium hover:bg-gray-200 transition"
         >
-          مشاهده سفارش‌های من
+          بازگشت به سایت
         </Link>
       </div>
     </div>

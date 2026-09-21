@@ -1,20 +1,20 @@
-'use client';
+"use client";
 
-import { useState } from 'react';
-import Link from 'next/link';
-import { useRouter, useSearchParams } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
-import api from '@/lib/api';
+import { useState } from "react";
+import Link from "next/link";
+import { useRouter, useSearchParams } from "next/navigation";
+import { useAuth } from "@/context/AuthContext";
+import api from "@/lib/api";
 
 export default function LoginPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const returnUrl = searchParams.get('returnUrl');
+  const returnUrl = searchParams.get("returnUrl");
   const { login } = useAuth();
 
   const [formData, setFormData] = useState({
-    email: '',
-    password: '',
+    email: "",
+    password: "",
   });
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -26,31 +26,41 @@ export default function LoginPage() {
 
     try {
       // ارسال به AuthController دات‌نت
-      const res = await api.post('/auth/login', {
+      const res = await api.post("/auth/login", {
         email: formData.email.trim(),
         password: formData.password,
       });
 
       const { token, user } = res.data;
 
-      // ثبت توکن در کوکی و استیت برنامه
+      // 1) ذخیره در کوکی (برای اینکه SSR بتواند token را بخواند)
+      // نکته: نام کوکی را با کد /orders یکسان نگه دار
+      document.cookie = `agro-token=${encodeURIComponent(
+        token,
+      )}; Path=/; Max-Age=${60 * 60 * 24 * 7}; SameSite=Lax`;
+
+      // 2) ثبت در استیت برنامه (Context)
       login(token, user);
+
+      window.location.href = "/orders";
 
       // هدایت کاربر: اولویت با returnUrl است، سپس نقش ادمین، سپس صفحه اصلی
       if (returnUrl) {
         router.push(returnUrl);
-      } else if (user.role === 'Admin') {
-        router.push('/admin');
+      } else if (user?.role === "Admin") {
+        router.push("/admin");
       } else {
-        router.push('/');
+        router.push("/");
       }
     } catch (err: any) {
       if (err.response?.data?.message) {
         setError(err.response.data.message);
       } else if (err.response?.status === 401) {
-        setError('ایمیل یا رمز عبور اشتباه است.');
+        setError("ایمیل یا رمز عبور اشتباه است.");
       } else {
-        setError('خطا در برقراری ارتباط با سرور. لطفا وضعیت بک‌اند را بررسی کنید.');
+        setError(
+          "خطا در برقراری ارتباط با سرور. لطفا وضعیت بک‌اند را بررسی کنید.",
+        );
       }
     } finally {
       setSubmitting(false);
@@ -62,7 +72,9 @@ export default function LoginPage() {
       <div className="w-full max-w-md bg-white rounded-2xl border border-gray-100 shadow-sm p-8">
         <div className="text-center mb-8">
           <span className="text-4xl">🌱</span>
-          <h1 className="text-2xl font-bold text-gray-800 mt-2">ورود به حساب کاربری</h1>
+          <h1 className="text-2xl font-bold text-gray-800 mt-2">
+            ورود به حساب کاربری
+          </h1>
           <p className="text-sm text-gray-500 mt-1">
             برای خرید و دسترسی به سفارش‌ها وارد شوید
           </p>
@@ -85,7 +97,9 @@ export default function LoginPage() {
               dir="ltr"
               placeholder="example@mail.com"
               value={formData.email}
-              onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, email: e.target.value })
+              }
               className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600 transition"
             />
           </div>
@@ -102,7 +116,9 @@ export default function LoginPage() {
               dir="ltr"
               placeholder="••••••••"
               value={formData.password}
-              onChange={(e) => setFormData({ ...formData, password: e.target.value })}
+              onChange={(e) =>
+                setFormData({ ...formData, password: e.target.value })
+              }
               className="w-full border border-gray-300 rounded-lg px-3 py-2.5 text-sm focus:outline-none focus:ring-2 focus:ring-green-600 transition"
             />
           </div>
@@ -112,13 +128,16 @@ export default function LoginPage() {
             disabled={submitting}
             className="w-full bg-green-600 text-white py-2.5 rounded-lg text-sm font-medium hover:bg-green-700 transition disabled:bg-gray-300 disabled:cursor-not-allowed mt-2"
           >
-            {submitting ? 'در حال ورود...' : 'ورود به حساب'}
+            {submitting ? "در حال ورود..." : "ورود به حساب"}
           </button>
         </form>
 
         <div className="mt-6 text-center text-sm text-gray-600">
-          حساب کاربری ندارید؟{' '}
-          <Link href="/register" className="text-green-700 font-semibold hover:underline">
+          حساب کاربری ندارید؟{" "}
+          <Link
+            href="/register"
+            className="text-green-700 font-semibold hover:underline"
+          >
             ثبت‌نام کنید
           </Link>
         </div>

@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 public interface IPaymentService
 {
     Task<string?> RequestPaymentAsync(int orderId, decimal amount, string description, string callbackUrl);
-    Task<bool> VerifyPaymentAsync(string authority, decimal amount);
+    public Task<(bool isSuccess, long refId)> VerifyPaymentAsync(string authority, decimal amount);
     string GetPaymentGatewayUrl(string authority);
 }
 
@@ -74,7 +74,7 @@ public class ZarinPalService : IPaymentService
         return null;
     }
 
-    public async Task<bool> VerifyPaymentAsync(string authority, decimal amount)
+    public async Task<(bool isSuccess, long refId)> VerifyPaymentAsync(string authority, decimal amount)
     {
         var url = $"{_baseUrl}/pg/v4/payment/verify.json";
 
@@ -90,14 +90,19 @@ public class ZarinPalService : IPaymentService
             var response = await _httpClient.PostAsJsonAsync(url, payload);
             var result = await response.Content.ReadFromJsonAsync<ZarinPalVerifyResponse>();
 
-            return result?.Data?.Code == 100 || result?.Data?.Code == 101;
+            if (result?.Data?.Code == 100 || result?.Data?.Code == 101)
+            {
+                return (true, result.Data.RefId);
+            }
         }
         catch (Exception ex)
         {
             _logger.LogError(ex, "Exception while verifying ZarinPal payment");
-            return false;
         }
+
+        return (false, 0);
     }
+
 
     public string GetPaymentGatewayUrl(string authority)
     {

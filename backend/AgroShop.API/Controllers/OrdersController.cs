@@ -7,6 +7,7 @@ using AgroShop.API.DTOs;
 using AgroShop.API.Services;
 using AgroShop.API.Data;
 using Microsoft.EntityFrameworkCore;
+using AgroShop.API.Models;
 
 [ApiController]
 [Route("api/[controller]")]
@@ -26,32 +27,87 @@ public class OrdersController : ControllerBase
         _config = configuration;
 
     }
+    private string? GetCurrentUserId()
+    {
+        return User.FindFirst(ClaimTypes.NameIdentifier)?.Value;
+    }
 
-    private string? GetUserId() =>
-        User.FindFirstValue(ClaimTypes.NameIdentifier);
+    // GET: api/orders/my-orders
+    [HttpGet("my-orders")]
+    public async Task<ActionResult<IEnumerable<OrderListDto>>> GetMyOrders()
+    {
+        var userId = GetCurrentUserId();
+        if (string.IsNullOrEmpty(userId))
+            return Unauthorized();
 
-    // [HttpPost]
-    // public async Task<ActionResult<OrderResponseDto>> CreateOrder([FromBody] CreateOrderDto dto)
-    // {
-    //     var userId = GetUserId();
-    //     if (string.IsNullOrEmpty(userId))
-    //         return Unauthorized();
 
-    //     try
-    //     {
-    //         var order = await _orderService.CreateOrderFromCartAsync(userId, dto);
-    //         return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, order);
-    //     }
-    //     catch (InvalidOperationException ex)
-    //     {
-    //         return BadRequest(new { message = ex.Message });
-    //     }
-    // }
+        var orders = await _context.Orders
+            .Where(o => o.UserId == userId)
+            .OrderByDescending(o => o.OrderDate)
+            .Select(o => new OrderListDto
+            {
+                Id = o.Id,
+                OrderNumber = o.OrderNumber,
+                TotalAmount = o.TotalAmount,
+                Status = o.Status.ToString(),
+                IsPaid = o.IsPaid,
+                CreatedAt = o.OrderDate,
+                TotalItemsCount = o.Items.Sum(i => i.Quantity)
+            })
+            .ToListAsync();
+
+        return Ok(orders);
+    }
+
+    // GET: api/orders/my-orders/{orderNumber}
+    [HttpGet("my-orders/{orderNumber}")]
+    public async Task<ActionResult<OrderDetailDto>> GetMyOrderDetails(string orderNumber)
+    {
+        var userId = GetCurrentUserId();
+        if (string.IsNullOrEmpty(userId))
+            return Unauthorized();
+
+
+        var order = await _context.Orders
+            .Where(o => o.UserId == userId && o.OrderNumber == orderNumber)
+            .Select(o => new OrderDetailDto
+            {
+                Id = o.Id,
+                OrderNumber = o.OrderNumber,
+                TotalAmount = o.TotalAmount,
+                Status = o.Status.ToString(),
+                IsPaid = o.IsPaid,
+                PaymentDate = o.PaymentDate,
+                RefId = o.RefId,
+                CreatedAt = o.OrderDate,
+                RecipientName = o.ReceiverName,
+                PhoneNumber = o.ReceiverPhone,
+                Address = o.ShippingAddress,
+                PostalCode = o.ShippingPostalCode,
+                ShippingTrackingCode = o.PaymentTrackingCode,
+                Items = o.Items.Select(i => new OrderItemDto
+                {
+                    ProductId = i.ProductId,
+                    ProductName = i.ProductName, // خوانده شده از اسنپ‌شات آیتم
+                    UnitPrice = i.UnitPrice,     // خوانده شده از اسنپ‌شات آیتم
+                    Quantity = i.Quantity
+                }).ToList()
+            })
+            .FirstOrDefaultAsync();
+
+        if (order == null)
+            return NotFound(new { message = "سفارش یافت نشد." });
+
+        return Ok(order);
+    }
+
+
+
 
     [HttpPost]
     public async Task<ActionResult<OrderResponseDto>> CreateOrder([FromBody] CreateOrderDto dto)
     {
-        var userId = GetUserId();
+        var userId = GetCurrentUserId();
         if (string.IsNullOrEmpty(userId))
             return Unauthorized();
 
@@ -77,21 +133,12 @@ public class OrdersController : ControllerBase
     }
 
 
-    [HttpGet]
-    public async Task<ActionResult<List<OrderResponseDto>>> GetMyOrders()
-    {
-        var userId = GetUserId();
-        if (string.IsNullOrEmpty(userId))
-            return Unauthorized();
 
-        var orders = await _orderService.GetUserOrdersAsync(userId);
-        return Ok(orders);
-    }
 
     [HttpGet("{id}")]
     public async Task<ActionResult<OrderResponseDto>> GetOrder(int id)
     {
-        var userId = GetUserId();
+        var userId = GetCurrentUserId();
         if (string.IsNullOrEmpty(userId))
             return Unauthorized();
 
@@ -142,52 +189,75 @@ public class OrdersController : ControllerBase
 
     [AllowAnonymous]
     [HttpGet("verify")]
-    public async Task<IActionResult> Verify(
-        [FromQuery] string? Authority,
-        [FromQuery] string? Status)
+    public async Task<IActionResult> Verify([FromQuery] string? Authority, [FromQuery] string? Status)
     {
         const string frontendUrl = "http://localhost:3000";
 
-        if (string.IsNullOrWhiteSpace(Authority))
+        if (string.IsNullOrEmpty(Authority) || Status != "OK")
         {
-            return Redirect(
-                $"{frontendUrl}/payment/failed?reason=invalid-authority");
+            return Redirect($"{frontendUrl}/payment/failed?reason=cancelled");
         }
 
-        // در Callback زرین‌پال، فقط Status=OK باید Verify شود.
-        if (!string.Equals(Status, "OK", StringComparison.OrdinalIgnoreCase))
-        {
-            return Redirect(
-                $"{frontendUrl}/payment/failed?reason=cancelled&authority={Uri.EscapeDataString(Authority)}");
-        }
-
+        // ۱. لود کردن سفارش با لیست Items
         var order = await _context.Orders
+            .Include(o => o.Items)
             .FirstOrDefaultAsync(o => o.Authority == Authority);
 
         if (order == null)
         {
-            return Redirect(
-                $"{frontendUrl}/payment/failed?reason=order-not-found");
+            return Redirect($"{frontendUrl}/payment/failed?reason=order-not-found");
         }
 
-        // از مبلغ ذخیره‌شده سفارش استفاده کنید؛ نه مبلغ ارسالی کاربر.
-        var isVerified = await _paymentService.VerifyPaymentAsync(
-            Authority,
-            order.TotalAmount);
-
-        if (!isVerified)
+        // ۲. جلوگیری از کسر مجدد موجودی در صورت رفرش صفحه
+        if (order.IsPaid)
         {
-            return Redirect(
-                $"{frontendUrl}/payment/failed?reason=verification-failed");
+            return Redirect($"{frontendUrl}/payment/success?orderId={order.OrderNumber}&refId={order.RefId}");
         }
 
-        order.IsPaid = true;
-        order.PaymentDate = DateTime.UtcNow;
+        // ۳. اعتبارسنجی درگاه زرین‌پال
+        var (isVerified, refId) = await _paymentService.VerifyPaymentAsync(Authority, order.TotalAmount);
 
-        await _context.SaveChangesAsync();
+        if (isVerified)
+        {
+            // ۴. به‌روزرسانی وضعیت سفارش
+            order.IsPaid = true;
+            order.Status = OrderStatus.Paid;
+            order.PaymentDate = DateTime.UtcNow;
+            order.RefId = refId.ToString();
+            order.PaymentTrackingCode = refId.ToString();
 
-        return Redirect(
-            $"{frontendUrl}/payment/success?orderId={order.Id}");
+            // ۵. کسر موجودی از جدول Products
+            if (order.Items != null && order.Items.Any())
+            {
+                var productIds = order.Items.Select(i => i.ProductId).ToList();
+                var products = await _context.Products
+                    .Where(p => productIds.Contains(p.Id))
+                    .ToListAsync();
+
+                foreach (var item in order.Items)
+                {
+                    var product = products.FirstOrDefault(p => p.Id == item.ProductId);
+                    if (product != null)
+                    {
+                        // اگر در مدل Product نام فیلد Stock است:
+                        product.StockQuantity = Math.Max(0, product.StockQuantity - item.Quantity);
+
+                        // اگر در مدل Product نام دیگری مثل StockQuantity است، آن را بگذارید:
+                        // product.StockQuantity = Math.Max(0, product.StockQuantity - item.Quantity);
+                    }
+                }
+            }
+
+            await _context.SaveChangesAsync();
+
+            // ارسال شماره سفارش خوانا (OrderNumber) و RefId به فرانت
+            return Redirect($"{frontendUrl}/payment/success?orderId={order.OrderNumber}&refId={refId}");
+        }
+
+        return Redirect($"{frontendUrl}/payment/failed?reason=verification-failed");
     }
+
+
+
 
 }

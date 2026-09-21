@@ -36,6 +36,27 @@ export interface OrderResponseDto {
   items: OrderItemDto[];
 }
 
+export interface OrderItemDto {
+  productId: number;
+  productName: string;
+  quantity: number;
+  unitPrice: number;
+}
+
+export interface UserOrderDto {
+  id: number;
+  orderNumber: string;
+  orderDate: string;
+  totalAmount: number;
+  isPaid: boolean;
+  status: number;
+  statusText: string;
+  paymentTrackingCode?: string;
+  receiverName: string;
+  itemsCount: number;
+  items: OrderItemDto[];
+}
+
 const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_URL || "http://localhost:5079/api";
 
@@ -77,14 +98,18 @@ export async function createOrder(dto: CreateOrderDto): Promise<OrderResponseDto
   return res.json();
 }
 
-export async function getMyOrders(): Promise<OrderResponseDto[]> {
-  const res = await fetch(`${API_BASE_URL}/orders`, {
-    headers: defaultHeaders,
-    credentials: "include", // 👈 حتماً اضافه کنید
+export async function fetchMyOrders(): Promise<UserOrderDto[]> {
+  const res = await fetch("http://localhost:5000/api/orders/my-orders", {
+    method: "GET",
+    credentials: "include", // حیاتی برای ارسال کوکی agro-token
+    headers: {
+      "Content-Type": "application/json",
+    },
+    cache: "no-store",
   });
 
   if (!res.ok) {
-    throw new Error("خطا در دریافت لیست سفارش‌ها");
+    throw new Error("خطا در دریافت لیست سفارشات");
   }
 
   return res.json();

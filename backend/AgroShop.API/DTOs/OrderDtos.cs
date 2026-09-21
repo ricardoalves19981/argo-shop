@@ -49,3 +49,36 @@ public class OrderResponseDto
 
     public List<OrderItemDto> Items { get; set; } = new();
 }
+
+
+public class OrderListDto
+{
+    public int Id { get; set; }
+    public string OrderNumber { get; set; } = string.Empty;
+    public decimal TotalAmount { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public bool IsPaid { get; set; }
+    public DateTime CreatedAt { get; set; }
+    public int TotalItemsCount { get; set; }
+}
+
+public class OrderDetailDto
+{
+    public int Id { get; set; }
+    public string OrderNumber { get; set; } = string.Empty;
+    public decimal TotalAmount { get; set; }
+    public string Status { get; set; } = string.Empty;
+    public bool IsPaid { get; set; }
+    public DateTime? PaymentDate { get; set; }
+    public string? RefId { get; set; }
+    public DateTime CreatedAt { get; set; }
+
+    // مشخصات ارسال
+    public string RecipientName { get; set; } = string.Empty;
+    public string PhoneNumber { get; set; } = string.Empty;
+    public string Address { get; set; } = string.Empty;
+    public string PostalCode { get; set; } = string.Empty;
+    public string? ShippingTrackingCode { get; set; }
+
+    public List<OrderItemDto> Items { get; set; } = new();
+}

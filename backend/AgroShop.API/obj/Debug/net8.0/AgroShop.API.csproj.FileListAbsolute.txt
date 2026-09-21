@@ -126,3 +126,4 @@ D:\project_kalan\argo-shop\backend\AgroShop.API\bin\Debug\net8.0\Microsoft.Ident
 D:\project_kalan\argo-shop\backend\AgroShop.API\bin\Debug\net8.0\Microsoft.IdentityModel.Protocols.OpenIdConnect.dll
 D:\project_kalan\argo-shop\backend\AgroShop.API\bin\Debug\net8.0\Microsoft.IdentityModel.Tokens.dll
 D:\project_kalan\argo-shop\backend\AgroShop.API\bin\Debug\net8.0\System.IdentityModel.Tokens.Jwt.dll
+D:\project_kalan\argo-shop\backend\AgroShop.API\obj\Debug\net8.0\AgroShop.API.sourcelink.json
