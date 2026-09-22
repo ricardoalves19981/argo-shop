@@ -248,7 +248,7 @@ async function getOrderDetails(orderNumber: string): Promise<OrderDetail> {
     process.env.NEXT_PUBLIC_API_URL ||
     "http://localhost:5079";
 
-  const targetUrl = `${baseUrl}/api/orders/my-orders/${orderNumber}`;
+  const targetUrl = `${baseUrl}/orders/my-orders/${orderNumber}`;
 
   const res = await fetch(targetUrl, {
     headers: {

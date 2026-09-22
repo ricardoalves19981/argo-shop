@@ -76,25 +76,37 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "ایمیل یا رمز عبور اشتباه است." });
 
         var roles = await _userManager.GetRolesAsync(user);
-        var mainRole = roles.FirstOrDefault() ?? UserRoles.Customer;
+        // اگر کاربر در نقش Admin است اولویت با Admin باشد
+        var mainRole = roles.Contains(UserRoles.Admin) ? UserRoles.Admin : (roles.FirstOrDefault() ?? UserRoles.Customer);
 
         var token = await _tokenService.CreateTokenAsync(user);
 
-        // ✅ اصلاح تنظیمات کوکی برای لوکال هاست
-        var cookieOptions = new CookieOptions
+        var isHttps = Request.IsHttps;
+
+        var tokenCookieOptions = new CookieOptions
         {
             HttpOnly = true,
-            Secure = Request.IsHttps, // اگر ریکوئست https است true، اگر http است false
-            SameSite = Request.IsHttps ? SameSiteMode.None : SameSiteMode.Lax, // برای http روی لوکال باید Lax باشد
+            Secure = isHttps,
+            SameSite = isHttps ? SameSiteMode.None : SameSiteMode.Lax,
             Expires = DateTimeOffset.UtcNow.AddDays(7),
             Path = "/"
         };
 
-        Response.Cookies.Append("agro_token", token, cookieOptions);
+        var roleCookieOptions = new CookieOptions
+        {
+            HttpOnly = false, // اجازه خواندن به جاوااسکریپت و کلاینت
+            Secure = isHttps,
+            SameSite = isHttps ? SameSiteMode.None : SameSiteMode.Lax,
+            Expires = DateTimeOffset.UtcNow.AddDays(7),
+            Path = "/"
+        };
+
+        Response.Cookies.Append("agro_token", token, tokenCookieOptions);
+        Response.Cookies.Append("agro_role", mainRole, roleCookieOptions);
 
         return Ok(new AuthResponseDto
         {
-            Token = token, // ترجیحاً توکن را هم برگردانید تا اگر برای تست لازمه داشته باشید
+            Token = token,
             User = new UserDto
             {
                 Id = user.Id,
@@ -107,6 +119,7 @@ public class AuthController : ControllerBase
             }
         });
     }
+
 
 
     [Authorize]

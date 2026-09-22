@@ -11,30 +11,21 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
 
-
 var builder = WebApplication.CreateBuilder(args);
 
 // ۱. تنظیم CORS برای فرانت‌انند Next.js
-// builder.Services.AddCors(options =>
-// {
-//     options.AddPolicy("AllowNextJs", policy =>
-//     {
-//         policy.WithOrigins("http://localhost:3000")
-//               .AllowAnyHeader()
-//               .AllowAnyMethod();
-//     });
-// });
 builder.Services.AddCors(options =>
-  {
-      options.AddPolicy("AllowNextJs", policy =>
-      {
-          policy.WithOrigins("http://localhost:3000")
-                .AllowAnyMethod()
-                .AllowAnyHeader()
-                .AllowCredentials()
-                .WithExposedHeaders("X-Guest-Id");
-      });
-  });
+{
+    options.AddPolicy("AllowNextJs", policy =>
+    {
+        policy.WithOrigins("http://localhost:3000")
+              .AllowAnyMethod()
+              .AllowAnyHeader()
+              .AllowCredentials()
+              .WithExposedHeaders("X-Guest-Id");
+    });
+});
+
 // ۲. اتصال به دیتابیس PostgreSQL
 builder.Services.AddDbContext<AppDbContext>(options =>
     options.UseNpgsql(builder.Configuration.GetConnectionString("DefaultConnection")));
@@ -50,7 +41,6 @@ builder.Services.AddIdentity<AppUser, IdentityRole>(options =>
 })
 .AddEntityFrameworkStores<AppDbContext>()
 .AddDefaultTokenProviders();
-
 
 // ۴. پیکربندی JWT Authentication
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -75,12 +65,11 @@ builder.Services.AddAuthentication(options =>
         IssuerSigningKey = new SymmetricSecurityKey(key)
     };
 
-    // ✅ این بخش اضافه شود: خواندن توکن از کوکی
+    // خواندن توکن از کوکی در صورت وجود
     options.Events = new JwtBearerEvents
     {
         OnMessageReceived = context =>
         {
-            // نام کوکی را همان چیزی بگذارید که در لاگین ست کردید (مثلاً "jwt")
             if (context.Request.Cookies.TryGetValue("agro_token", out var token))
             {
                 context.Token = token;
@@ -89,8 +78,6 @@ builder.Services.AddAuthentication(options =>
         }
     };
 });
-
-
 
 builder.Services.AddControllers()
     .AddNewtonsoftJson(options =>
@@ -131,7 +118,6 @@ builder.Services.AddScoped<ICartService, CartService>();
 builder.Services.AddScoped<IOrderService, OrderService>();
 builder.Services.AddHttpClient<IPaymentService, ZarinPalService>();
 
-
 var app = builder.Build();
 
 // ۶. اجرای اتوماتیک Migration و Seed کردن نقش‌ها و ادمین پیش‌فرض
@@ -143,7 +129,6 @@ using (var scope = app.Services.CreateScope())
         var roleManager = services.GetRequiredService<RoleManager<IdentityRole>>();
         var userManager = services.GetRequiredService<UserManager<AppUser>>();
 
-        // تعریف نقش‌ها
         string[] roles = [UserRoles.Admin, UserRoles.Manager, UserRoles.Customer];
 
         foreach (var role in roles)
@@ -154,7 +139,6 @@ using (var scope = app.Services.CreateScope())
             }
         }
 
-        // ایجاد ادمین اولیه در صورت عدم وجود
         var adminEmail = "admin@agroshop.com";
         var adminUser = await userManager.FindByEmailAsync(adminEmail);
 
@@ -195,8 +179,11 @@ if (!app.Environment.IsDevelopment())
     app.UseHttpsRedirection();
 }
 
-// ترتیب Middlewareها
+// ترتیب صحیح Middlewareها
 app.UseCors("AllowNextJs");
+
+// ✅ سرو فایل‌های استاتیک برای دسترسی به تصاویر آپلود شده در wwwroot
+app.UseStaticFiles();
 
 app.UseAuthentication(); // احراز هویت (JWT)
 app.UseAuthorization();  // بررسی دسترسی و نقش‌ها
