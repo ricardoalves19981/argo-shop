@@ -67,3 +67,31 @@ public class ProductFilterParams
     public int PageNumber { get; set; } = 1;
     public int PageSize { get; set; } = 12;
 }
+
+
+public class UpdateProductDto
+{
+    public string Name { get; set; } = string.Empty;
+    public string? TechnicalName { get; set; }
+    public string Description { get; set; } = string.Empty;
+    public decimal Price { get; set; }
+    public decimal? DiscountPrice { get; set; }
+    public int StockQuantity { get; set; }
+    public string Unit { get; set; } = "بسته";
+    public bool IsActive { get; set; } = true;
+
+    // فیلدهای کشاورزی
+    public string? ActiveIngredient { get; set; }
+    public string? Formulation { get; set; }
+    public string? TargetPests { get; set; }
+    public string? SuitableCrops { get; set; }
+    public string? UsageInstruction { get; set; }
+    public int? PreHarvestIntervalDays { get; set; }
+    public string? RegistrationCode { get; set; }
+
+    public int CategoryId { get; set; }
+    public int? BrandId { get; set; }
+
+    // لیست URL تصاویر (اگر تمایل دارید تصاویر جدید را با تصاویر قبلی هماهنگ کنید)
+    public List<string>? ImageUrls { get; set; }
+}

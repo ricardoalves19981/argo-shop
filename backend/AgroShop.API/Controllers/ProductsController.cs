@@ -20,17 +20,21 @@ public class ProductsController : ControllerBase
 
     // GET: api/products
     [HttpGet]
+    [Authorize(Roles = "Admin")]
     public async Task<IActionResult> GetProducts([FromQuery] ProductFilterParams filter)
     {
+        // اطمینان از مقداردهی صحیح صفحه‌بندی
+        var pageNumber = filter.PageNumber < 1 ? 1 : filter.PageNumber;
+        var pageSize = filter.PageSize < 1 ? 12 : filter.PageSize;
+
         var query = _context.Products
             .Include(p => p.Category)
             .Include(p => p.Brand)
             .Include(p => p.Images)
-            .Where(p => p.IsActive)
             .AsNoTracking()
             .AsQueryable();
 
-        // فیلتر دسته‌بندی با ID
+        // فیلتر دسته‌بندی با شناسه
         if (filter.CategoryId.HasValue)
         {
             query = query.Where(p => p.CategoryId == filter.CategoryId.Value);
@@ -43,7 +47,7 @@ public class ProductsController : ControllerBase
             query = query.Where(p => p.Category != null && p.Category.Name.Contains(catTerm));
         }
 
-        // فیلتر جستجو در نام، نام ژنریک، ماده موثره و آفات هدف
+        // فیلتر جستجو در نام تجاری، نام ژنریک، ماده موثره، آفات هدف و گیاهان هدف
         if (!string.IsNullOrWhiteSpace(filter.Search))
         {
             var term = filter.Search.Trim();
@@ -61,7 +65,7 @@ public class ProductsController : ControllerBase
             query = query.Where(p => p.BrandId == filter.BrandId.Value);
         }
 
-        // فیلتر حداقل و حداکثر قیمت
+        // فیلتر حداقل و حداکثر قیمت (با اولویت قیمت تخفیف‌خورده در صورت وجود)
         if (filter.MinPrice.HasValue)
         {
             query = query.Where(p => (p.DiscountPrice ?? p.Price) >= filter.MinPrice.Value);
@@ -71,7 +75,7 @@ public class ProductsController : ControllerBase
             query = query.Where(p => (p.DiscountPrice ?? p.Price) <= filter.MaxPrice.Value);
         }
 
-        // فیلتر موجودی
+        // فیلتر فقط کالاهای موجود
         if (filter.InStockOnly == true)
         {
             query = query.Where(p => p.StockQuantity > 0);
@@ -89,8 +93,8 @@ public class ProductsController : ControllerBase
         var totalCount = await query.CountAsync();
 
         var items = await query
-            .Skip((filter.PageNumber - 1) * filter.PageSize)
-            .Take(filter.PageSize)
+            .Skip((pageNumber - 1) * pageSize)
+            .Take(pageSize)
             .Select(p => new ProductListDto
             {
                 Id = p.Id,
@@ -103,11 +107,10 @@ public class ProductsController : ControllerBase
                 StockQuantity = p.StockQuantity,
                 Unit = p.Unit,
                 MainImageUrl = p.Images
-    .OrderByDescending(i => i.IsMain)
-    .ThenBy(i => i.Id)
-    .Select(i => i.Url)
-    .FirstOrDefault(),
-
+                    .OrderByDescending(i => i.IsMain)
+                    .ThenBy(i => i.Id)
+                    .Select(i => i.Url)
+                    .FirstOrDefault(),
                 BrandName = p.Brand != null ? p.Brand.Name : null,
                 PreHarvestIntervalDays = p.PreHarvestIntervalDays,
                 IsActive = p.IsActive
@@ -117,12 +120,13 @@ public class ProductsController : ControllerBase
         return Ok(new
         {
             TotalCount = totalCount,
-            PageNumber = filter.PageNumber,
-            PageSize = filter.PageSize,
-            TotalPages = (int)Math.Ceiling(totalCount / (double)filter.PageSize),
+            PageNumber = pageNumber,
+            PageSize = pageSize,
+            TotalPages = (int)Math.Ceiling(totalCount / (double)pageSize),
             Data = items
         });
     }
+
 
     // GET: api/products/{id}
     [HttpGet("{id}")]
@@ -231,4 +235,148 @@ public class ProductsController : ControllerBase
 
         return CreatedAtAction(nameof(GetProductById), new { id = product.Id }, product);
     }
+
+
+    [HttpPut("{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UpdateProduct(int id, [FromBody] UpdateProductDto dto)
+    {
+        if (!ModelState.IsValid)
+        {
+            return BadRequest(ModelState);
+        }
+
+        // ۱. پیدا کردن محصول به همراه عکس‌های آن
+        var product = await _context.Products
+            .Include(p => p.Images)
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+        if (product == null)
+        {
+            return NotFound(new { message = "محصول مورد نظر یافت نشد." });
+        }
+
+        // ۲. بررسی وجود دسته‌بندی
+        var categoryExists = await _context.Categories.AnyAsync(c => c.Id == dto.CategoryId);
+        if (!categoryExists)
+        {
+            return BadRequest(new { message = "دسته‌بندی مشخص‌شده معتبر نیست." });
+        }
+
+        // ۳. بررسی برند در صورت ارسال
+        if (dto.BrandId.HasValue && dto.BrandId.Value > 0)
+        {
+            var brandExists = await _context.Brands.AnyAsync(b => b.Id == dto.BrandId.Value);
+            if (!brandExists)
+            {
+                return BadRequest(new { message = "برند مشخص‌شده معتبر نیست." });
+            }
+            product.BrandId = dto.BrandId.Value;
+        }
+        else
+        {
+            product.BrandId = null;
+        }
+
+        // ۴. به‌روزرسانی فیلدهای عمومی و تخصصی
+        product.Name = dto.Name;
+        product.TechnicalName = dto.TechnicalName;
+        product.Description = dto.Description;
+        product.Price = dto.Price;
+        product.DiscountPrice = dto.DiscountPrice;
+        product.StockQuantity = dto.StockQuantity;
+        product.Unit = dto.Unit;
+        product.IsActive = dto.IsActive;
+        product.CategoryId = dto.CategoryId;
+
+        product.ActiveIngredient = dto.ActiveIngredient;
+        product.Formulation = dto.Formulation;
+        product.TargetPests = dto.TargetPests;
+        product.SuitableCrops = dto.SuitableCrops;
+        product.UsageInstruction = dto.UsageInstruction;
+        product.PreHarvestIntervalDays = dto.PreHarvestIntervalDays;
+        product.RegistrationCode = dto.RegistrationCode;
+
+        // ۵. به‌روزرسانی لیست تصاویر (در صورت ارسال لیست جدید)
+        if (dto.ImageUrls != null)
+        {
+            // حذف تصاویر قبلی از دیتابیس
+            _context.ProductImages.RemoveRange(product.Images);
+
+            // افزودن تصاویر جدید
+            var isFirst = true;
+            foreach (var url in dto.ImageUrls)
+            {
+                product.Images.Add(new ProductImage
+                {
+                    Url = url,
+                    IsMain = isFirst // اولین عکس به عنوان کاور/اصلی در نظر گرفته می‌شود
+                });
+                isFirst = false;
+            }
+        }
+
+        try
+        {
+            await _context.SaveChangesAsync();
+            return Ok(new { message = "محصول با موفقیت به‌روزرسانی شد.", productId = product.Id });
+        }
+        catch (Exception ex)
+        {
+            return StatusCode(500, new { message = "خطا در به‌روزرسانی محصول: " + ex.Message });
+        }
+    }
+
+
+    // DELETE: api/Products/{id}
+    [HttpDelete("{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> Delete(int id)
+    {
+        var product = await _context.Products
+            .Include(p => p.Images)
+            .Include(p => p.Reviews)
+            .FirstOrDefaultAsync(p => p.Id == id);
+
+        if (product == null)
+            return NotFound(new { message = "محصول مورد نظر یافت نشد." });
+
+        // اگر محصول در سفارشات باشد و کلید خارجی در دیتابیس تعریف شده باشد:
+        var hasOrders = await _context.OrderItems.AnyAsync(oi => oi.ProductId == id);
+        if (hasOrders)
+        {
+            return BadRequest(new
+            {
+                message = "این محصول در سفارش‌های ثبت‌شده مشتریان وجود دارد و حذف کامل آن باعث اختلال در سوابق مالی می‌شود. می‌توانید محصول را «غیرفعال» کنید."
+            });
+        }
+
+        // حذف تصاویر و نظرات وابسته و در نهایت حذف خود محصول
+        _context.ProductImages.RemoveRange(product.Images);
+        _context.Reviews.RemoveRange(product.Reviews);
+        _context.Products.Remove(product);
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "محصول با موفقیت حذف شد." });
+    }
+    // PATCH: api/Products/{id}/toggle-active
+    [HttpPatch("{id}/toggle-active")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> ToggleActive(int id)
+    {
+        var product = await _context.Products.FindAsync(id);
+        if (product == null)
+            return NotFound(new { message = "محصول یافت نشد." });
+
+        product.IsActive = !product.IsActive;
+        await _context.SaveChangesAsync();
+
+        return Ok(new
+        {
+            message = product.IsActive ? "محصول فعال شد." : "محصول غیرفعال شد.",
+            isActive = product.IsActive
+        });
+    }
+
 }

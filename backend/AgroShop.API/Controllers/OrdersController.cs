@@ -258,6 +258,88 @@ public class OrdersController : ControllerBase
     }
 
 
+    [HttpPut("{id}/status")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> UpdateOrderStatus(int id, [FromBody] UpdateOrderStatusDto dto)
+    {
+        var order = await _context.Orders.FindAsync(id);
+        if (order == null)
+            return NotFound(new { message = "سفارش یافت نشد" });
 
+        // تبدیل صریح int به OrderStatus
+        order.Status = (AgroShop.API.Models.OrderStatus)dto.Status;
+
+        await _context.SaveChangesAsync();
+
+        return Ok(new { message = "وضعیت سفارش با موفقیت به‌روزرسانی شد" });
+    }
+
+    // 1. دریافت همه سفارش‌ها مخصوص پنل ادمین
+    [HttpGet]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetAllOrders()
+    {
+        var orders = await _context.Orders
+            .Include(o => o.User) // در صورت وجود رابطه با کاربر
+            .OrderByDescending(o => o.OrderDate)
+            .Select(o => new
+            {
+                o.Id,
+                // اگر فیلد OrderNumber ندارید، می‌توانید حذف یا از Id استفاده کنید:
+                OrderNumber = o.Id.ToString(),
+                CustomerName = o.User != null ? (o.User.FullName ?? o.User.UserName) : "کاربر مهمان",
+                TotalAmount = o.TotalAmount,
+                Status = o.Status,
+                CreatedAt = o.OrderDate
+            })
+            .ToListAsync();
+
+        return Ok(orders);
+    }
+
+    // 2. دریافت جزئیات یک سفارش بر اساس ID برای صفحه جزئیات
+    [HttpGet("admin/{id}")]
+    [Authorize(Roles = "Admin")]
+    public async Task<IActionResult> GetAdminOrderById(int id)
+    {
+        var order = await _context.Orders
+            .Include(o => o.User)
+            .Include(o => o.Items)
+                .ThenInclude(oi => oi.Product) // اگر رابطه با محصول دارید
+            .FirstOrDefaultAsync(o => o.Id == id);
+
+        if (order == null)
+        {
+            return NotFound(new { message = "سفارش مورد نظر یافت نشد" });
+        }
+
+        var orderDto = new
+        {
+            order.Id,
+            OrderNumber = order.Id.ToString(),
+            CustomerName = order.User != null ? (order.User.FullName ?? order.User.UserName) : "کاربر مهمان",
+            order.ShippingAddress,
+            order.ShippingPostalCode,
+            order.TotalAmount,
+            order.Status,
+            order.OrderDate,
+            User = order.User != null ? new
+            {
+                FullName = order.User.FullName ?? order.User.UserName,
+                PhoneNumber = order.User.PhoneNumber,
+                Email = order.User.Email
+            } : null,
+            Items = order.Items.Select(item => new
+            {
+                item.Id,
+                ProductName = item.Product != null ? item.Product.Name : "محصول",
+                UnitPrice = item.UnitPrice,
+                Quantity = item.Quantity,
+                TotalPrice = item.UnitPrice * item.Quantity
+            }).ToList()
+        };
+
+        return Ok(orderDto);
+    }
 
 }

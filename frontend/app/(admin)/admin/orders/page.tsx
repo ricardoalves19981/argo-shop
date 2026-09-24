@@ -15,7 +15,7 @@ async function getOrders() {
     const cookieStore = await cookies();
     const token = cookieStore.get("agro_token")?.value;
     const apiUrl =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:5000/api";
+      process.env.NEXT_PUBLIC_API_URL || "http://localhost:5079/api";
 
     const headers: Record<string, string> = {
       "Content-Type": "application/json",
@@ -29,7 +29,7 @@ async function getOrders() {
       headers,
       cache: "no-store",
     });
-
+    console.log(res);
     if (!res.ok) {
       console.error("خطا در پاسخ سفارشات:", res.status);
       return [];

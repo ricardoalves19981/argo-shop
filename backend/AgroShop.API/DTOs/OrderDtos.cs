@@ -82,3 +82,7 @@ public class OrderDetailDto
 
     public List<OrderItemDto> Items { get; set; } = new();
 }
+public class UpdateOrderStatusDto
+{
+    public int Status { get; set; }
+}

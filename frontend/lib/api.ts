@@ -5,31 +5,47 @@ const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5079/a
 
 const api = axios.create({
   baseURL: API_BASE_URL,
+  withCredentials: true,
   headers: {
     'Content-Type': 'application/json',
   },
 });
 
-// اینترسپتور: به هر درخواستی که فرستاده می‌شود، توکن JWT را اضافه می‌کند
+// اینترسپتور ارسال درخواست
 api.interceptors.request.use(
   (config) => {
-    const token = Cookies.get('agro_token');
+    // اولویت ۱: خواندن از localStorage
+    let token: string | null | undefined =
+      typeof window !== 'undefined' ? localStorage.getItem('token') : null;
+
+    // اولویت ۲: خواندن از کوکی در صورت وجود
+    if (!token) {
+      token = Cookies.get('agro_token') || Cookies.get('token') || null;
+    }
+
     if (token && config.headers) {
       config.headers.Authorization = `Bearer ${token}`;
     }
+
     return config;
   },
   (error) => Promise.reject(error)
 );
 
-// اینترسپتور ریسپانس: در صورت خطای ۴۰۱ (انقضای توکن)، کاربر را خارج می‌کند
+// اینترسپتور پاسخ (مدیریت ۴۰۱)
 api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      Cookies.remove('agro_token');
-      if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/login')) {
-        window.location.href = '/login';
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('token');
+        localStorage.removeItem('user');
+        Cookies.remove('agro_token');
+        Cookies.remove('agro_role');
+
+        if (!window.location.pathname.startsWith('/login')) {
+          window.location.href = '/login';
+        }
       }
     }
     return Promise.reject(error);
