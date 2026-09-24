@@ -1,6 +1,6 @@
 // middleware.ts
 import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server"; // 👈 از next/server ایمپورت شود
+import type { NextRequest } from "next/server";
 
 export function middleware(request: NextRequest) {
   const token = request.cookies.get("agro_token")?.value;
@@ -11,21 +11,24 @@ export function middleware(request: NextRequest) {
   const isDashboardPage = pathname.startsWith("/dashboard");
   const isAdminPage = pathname.startsWith("/admin");
 
-  // ۱. اگر توکن ندارد و می‌خواهد به داشبورد یا پنل ادمین برود
+  // تبدیل نقش به حروف کوچک برای مقایسه مطمئن
+  const isAdmin = role?.toLowerCase() === "admin";
+
+  // ۱. کاربر لاگین نکرده است
   if (!token && (isDashboardPage || isAdminPage)) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("returnUrl", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  // ۲. اگر کاربر ادمین نیست و می‌خواهد به ادمین برود
-  if (isAdminPage && role !== "Admin") {
+  // ۲. کاربر لاگین کرده ولی دسترسی ادمین ندارد و می‌خواهد به پنل ادمین برود
+  if (isAdminPage && !isAdmin) {
     return NextResponse.redirect(new URL("/dashboard", request.url));
   }
 
-  // ۳. اگر کاربر لاگین است و صفحه ورود را باز می‌کند (مگر اینکه دکمه خروج را زده باشد)
+  // ۳. کاربر لاگین کرده و صفحه ورود یا ثبت‌نام را باز کرده است
   if (token && isAuthPage && !request.nextUrl.searchParams.has("logout")) {
-    if (role === "Admin") {
+    if (isAdmin) {
       return NextResponse.redirect(new URL("/admin/products", request.url));
     }
     return NextResponse.redirect(new URL("/dashboard", request.url));
