@@ -71,15 +71,28 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   }, []);
 
   // متد لاگین جهت ثبت توکن، کوکی‌ها و استیت
-  const login = (token: string, userData: User) => {
+  // src/context/AuthContext.tsx
+
+  const login = (token: string, userData: any) => {
     setUser(userData);
     localStorage.setItem("token", token);
     localStorage.setItem("user", JSON.stringify(userData));
 
-    // ست کردن کوکی‌ها برای استفاده میدل‌ور و درخواست‌های SSR
+    // استخراج نقش (پوشش تمام حالت‌ها: رشته، آرایه یا حروف کوچک/بزرگ)
+    let userRole = "";
+    if (typeof userData.role === "string") {
+      userRole = userData.role;
+    } else if (Array.isArray(userData.roles) && userData.roles.length > 0) {
+      userRole = userData.roles[0];
+    } else if (Array.isArray(userData.role) && userData.role.length > 0) {
+      userRole = userData.role[0];
+    }
+
+    // ذخیره کوکی‌ها برای استفاده میدل‌ور
     Cookies.set("agro_token", token, { path: "/", expires: 7 });
-    if (userData.role) {
-      Cookies.set("agro_role", userData.role, { path: "/", expires: 7 });
+
+    if (userRole) {
+      Cookies.set("agro_role", userRole, { path: "/", expires: 7 });
     }
   };
 
