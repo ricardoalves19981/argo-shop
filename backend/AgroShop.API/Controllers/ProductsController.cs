@@ -20,17 +20,16 @@ public class ProductsController : ControllerBase
 
     // GET: api/products
     [HttpGet]
-    [Authorize(Roles = "Admin")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetProducts([FromQuery] ProductFilterParams filter)
     {
-        // اطمینان از مقداردهی صحیح صفحه‌بندی
+        // ۱. محدود کردن منطقی شماره صفحه و اندازه صفحه
+        const int maxPageSize = 50;
         var pageNumber = filter.PageNumber < 1 ? 1 : filter.PageNumber;
-        var pageSize = filter.PageSize < 1 ? 12 : filter.PageSize;
+        var pageSize = filter.PageSize < 1 ? 12 : Math.Min(filter.PageSize, maxPageSize);
 
+        // ۲. کوئری تمیز بدون Includeهای مازاد چون در Select فیلدها را می‌آوریم
         var query = _context.Products
-            .Include(p => p.Category)
-            .Include(p => p.Brand)
-            .Include(p => p.Images)
             .AsNoTracking()
             .AsQueryable();
 
@@ -65,7 +64,7 @@ public class ProductsController : ControllerBase
             query = query.Where(p => p.BrandId == filter.BrandId.Value);
         }
 
-        // فیلتر حداقل و حداکثر قیمت (با اولویت قیمت تخفیف‌خورده در صورت وجود)
+        // فیلتر قیمت
         if (filter.MinPrice.HasValue)
         {
             query = query.Where(p => (p.DiscountPrice ?? p.Price) >= filter.MinPrice.Value);
@@ -75,7 +74,7 @@ public class ProductsController : ControllerBase
             query = query.Where(p => (p.DiscountPrice ?? p.Price) <= filter.MaxPrice.Value);
         }
 
-        // فیلتر فقط کالاهای موجود
+        // فیلتر موجودی
         if (filter.InStockOnly == true)
         {
             query = query.Where(p => p.StockQuantity > 0);
@@ -90,8 +89,10 @@ public class ProductsController : ControllerBase
             _ => query.OrderByDescending(p => p.Id)
         };
 
+        // شمارش کل آیتم‌های منطبق با فیلتر
         var totalCount = await query.CountAsync();
 
+        // اجرای Paging و پروجکشن DTO
         var items = await query
             .Skip((pageNumber - 1) * pageSize)
             .Take(pageSize)
@@ -130,6 +131,7 @@ public class ProductsController : ControllerBase
 
     // GET: api/products/{id}
     [HttpGet("{id}")]
+    [AllowAnonymous]
     public async Task<IActionResult> GetProductById(int id)
     {
         var p = await _context.Products

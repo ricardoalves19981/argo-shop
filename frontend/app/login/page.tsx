@@ -42,8 +42,6 @@ export default function LoginPage() {
       // 2) ثبت در استیت برنامه (Context)
       login(token, user);
 
-      window.location.href = "/orders";
-
       // هدایت کاربر: اولویت با returnUrl است، سپس نقش ادمین، سپس صفحه اصلی
       if (returnUrl) {
         router.push(returnUrl);

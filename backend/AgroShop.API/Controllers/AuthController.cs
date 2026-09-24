@@ -147,4 +147,21 @@ public class AuthController : ControllerBase
             Role = roles.FirstOrDefault() ?? UserRoles.Customer
         });
     }
+
+    // POST: api/auth/logout
+    [HttpPost("logout")]
+    public IActionResult Logout()
+    {
+        // حذف کوکی توکن
+        Response.Cookies.Delete("token", new CookieOptions
+        {
+            HttpOnly = true,
+            Secure = true, // در محیط پروداکشن
+            SameSite = SameSiteMode.Lax,
+            Path = "/"
+        });
+
+        return Ok(new { message = "با موفقیت خارج شدید." });
+    }
+
 }

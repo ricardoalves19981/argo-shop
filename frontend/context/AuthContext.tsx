@@ -1,78 +1,132 @@
-'use client';
+// src/context/AuthContext.tsx
+"use client";
 
-import React, { createContext, useContext, useState, useEffect } from 'react';
-import Cookies from 'js-cookie';
-import api from '@/lib/api';
+import React, { createContext, useContext, useState, useEffect } from "react";
+import Cookies from "js-cookie";
 
 export interface User {
   id: string;
-  email: string;
-  fullName: string;
-  role: string;
-  phoneNumber?: string;
-  farmOrStoreName?: string;
+  userName?: string;
+  fullName?: string;
+  email?: string;
+  role?: string;
+  roles?: string[];
 }
 
 interface AuthContextType {
   user: User | null;
-  loading: boolean;
-  login: (token: string, userData: User) => void;
-  logout: () => void;
+  isLoading: boolean;
+  setUser: (user: User | null) => void;
+  login: (token: string, user: User) => void; // 👈 اضافه شد
+  logout: () => Promise<void>;
+  checkAuth: () => Promise<void>;
 }
 
-const AuthContext = createContext<AuthContextType | undefined>(undefined);
+const AuthContext = createContext<AuthContextType>({
+  user: null,
+  isLoading: true,
+  setUser: () => {},
+  login: () => {}, // 👈 مقدار پیش‌فرض
+  logout: async () => {},
+  checkAuth: async () => {},
+});
 
-export function AuthProvider({ children }: { children: React.ReactNode }) {
+export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
 
-  useEffect(() => {
-    const initAuth = async () => {
-      const token = Cookies.get('agro_token');
-      if (!token) {
-        setLoading(false);
-        return;
+  // بررسی وضعیت لاگین هنگام لود اولیه صفحه
+  const checkAuth = async () => {
+    try {
+      setIsLoading(true);
+      const storedUser = localStorage.getItem("user");
+      if (storedUser) {
+        try {
+          setUser(JSON.parse(storedUser));
+        } catch {}
       }
 
-      try {
-        // خواندن مشخصات کاربر جاری از اندپوینت Me بک‌اند
-        const res = await api.get('/auth/me');
-        setUser(res.data);
-      } catch {
-        // در صورت بروز خطا یا نامعتبر بودن توکن
-        Cookies.remove('agro_token');
+      const res = await fetch("http://localhost:5079/api/auth/me", {
+        method: "GET",
+        credentials: "include",
+      });
+
+      if (res.ok) {
+        const data = await res.json();
+        setUser(data);
+        localStorage.setItem("user", JSON.stringify(data));
+      } else {
         setUser(null);
-      } finally {
-        setLoading(false);
+        localStorage.removeItem("user");
       }
-    };
-
-    initAuth();
-  }, []);
-
-  const login = (token: string, userData: User) => {
-    // ذخیره توکن با اعتبار ۷ روزه در کوکی برای دسترسی Next.js Middleware
-    Cookies.set('agro_token', token, { expires: 7, sameSite: 'lax' });
-    setUser(userData);
+    } catch (err) {
+      console.error("خطا در بررسی نشست کاربر:", err);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
-  const logout = () => {
-    Cookies.remove('agro_token');
-    setUser(null);
-    window.location.href = '/login';
+  useEffect(() => {
+    checkAuth();
+  }, []);
+
+  // متد لاگین جهت ثبت توکن، کوکی‌ها و استیت
+  const login = (token: string, userData: User) => {
+    setUser(userData);
+    localStorage.setItem("token", token);
+    localStorage.setItem("user", JSON.stringify(userData));
+
+    // ست کردن کوکی‌ها برای استفاده میدل‌ور و درخواست‌های SSR
+    Cookies.set("agro_token", token, { path: "/", expires: 7 });
+    if (userData.role) {
+      Cookies.set("agro_role", userData.role, { path: "/", expires: 7 });
+    }
+  };
+
+  // src/context/AuthContext.tsx
+
+  // src/context/AuthContext.tsx
+
+  const logout = async () => {
+    try {
+      // ۱. اطلاع به سرور
+      await fetch("http://localhost:5079/api/auth/logout", {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (err) {
+      console.error("خطا در لاگ‌اوت سمت سرور:", err);
+    } finally {
+      // ۲. صفر کردن استیت ری‌اکت
+      setUser(null);
+
+      // ۳. پاک کردن LocalStorage
+      localStorage.clear();
+
+      // ۴. تابع کمکی برای پاک کردن یک کوکی در تمام دامنه‌ها و مسیرها
+      const expireCookie = (name: string) => {
+        // حذف استاندارد با js-cookie
+        Cookies.remove(name, { path: "/" });
+        Cookies.remove(name);
+
+        // حذف مستقیم با document.cookie برای انواع مسیرها و دامنه‌ها
+        document.cookie = `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;`;
+        document.cookie = `${name}=; Path=/; Domain=${window.location.hostname}; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;`;
+        document.cookie = `${name}=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;`;
+      };
+
+      // اعمال حذف برای تمامی کوکی‌های پروژه
+      ["agro_token", "agro_role", "token", "user"].forEach(expireCookie);
+    }
   };
 
   return (
-    <AuthContext.Provider value={{ user, loading, login, logout }}>
+    <AuthContext.Provider
+      value={{ user, isLoading, setUser, login, logout, checkAuth }}
+    >
       {children}
     </AuthContext.Provider>
   );
-}
-
-export const useAuth = () => {
-  const context = useContext(AuthContext);
-  if (!context) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
 };
+
+export const useAuth = () => useContext(AuthContext);
