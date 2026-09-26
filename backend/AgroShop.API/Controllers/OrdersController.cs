@@ -247,7 +247,20 @@ public class OrdersController : ControllerBase
                     }
                 }
             }
+            // ✅ پاک کردن سبد خرید کاربر بعد از پرداخت موفق
+            if (!string.IsNullOrEmpty(order.UserId))
+            {
+                var cart = await _context.Carts
+                    .Include(c => c.Items)
+                    .FirstOrDefaultAsync(c => c.UserId == order.UserId);
 
+                if (cart != null)
+                {
+                    _context.CartItems.RemoveRange(cart.Items);
+                    // اگر خود Cart را هم می‌خواهید حذف کنید:
+                    // _context.Carts.Remove(cart);
+                }
+            }
             await _context.SaveChangesAsync();
 
             // ارسال شماره سفارش خوانا (OrderNumber) و RefId به فرانت

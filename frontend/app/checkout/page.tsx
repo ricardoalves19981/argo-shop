@@ -30,7 +30,7 @@ export default function CheckoutPage() {
       setFormData((prev) => ({
         ...prev,
         receiverName: prev.receiverName || user.fullName || "",
-        receiverPhone: prev.receiverPhone || user.phoneNumber || "",
+        receiverPhone: prev.receiverPhone,
       }));
     }
   }, [user]);

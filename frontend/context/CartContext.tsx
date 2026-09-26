@@ -93,14 +93,14 @@ export const CartProvider: React.FC<{ children: React.ReactNode }> = ({
   };
 
   const clearCart = async () => {
-    startTransition(async () => {
-      try {
-        const updated = await cartApi.clearCart();
-        setCart(updated);
-      } catch (err) {
-        console.error("Clear cart error:", err);
-      }
-    });
+    try {
+      const updated = await cartApi.clearCart();
+      setCart(updated);
+    } catch (err) {
+      console.error("Clear cart error:", err);
+      // حتی اگر درخواست سرور ارور داد، لوکال استیت را ریست کن تا کاربر گیج نشود
+      setCart((prev) => (prev ? { ...prev, items: [], totalprice: 0 } : null));
+    }
   };
 
   return (

@@ -1,20 +1,26 @@
-"use client"; // حتما در ابتدای فایل باشد
+// src/app/payment/success/page.tsx
+"use client";
 
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
+import { useCart } from "@/context/CartContext"; // 👈 ایمپورت useCart
 
 export default function PaymentSuccessPage() {
   const searchParams = useSearchParams();
   const orderId = searchParams.get("orderId");
   const refId = searchParams.get("refId");
 
+  const { clearCart } = useCart();
+  const hasClearedRef = useRef(false);
+
   useEffect(() => {
-    // پاک کردن سبد خرید از حافظه مرورگر بلافاصله پس از لود صفحه موفقیت
-    localStorage.removeItem("cart");
-    // اگر از Event برای آپدیت هدر استفاده می‌کنید، آن را هم صدا بزنید
-    window.dispatchEvent(new Event("cart-updated"));
-  }, []);
+    // جلوگیری از اجرای دوبار متوالی در حالت StrictMode ری‌اکت
+    if (!hasClearedRef.current) {
+      hasClearedRef.current = true;
+      clearCart(); // 👈 ارسال درخواست به /api/cart جهت حذف سبد در دیتابیس و خالی شدن استیت
+    }
+  }, [clearCart]);
 
   return (
     <div
@@ -53,7 +59,7 @@ export default function PaymentSuccessPage() {
 
       <div className="grid grid-cols-2 gap-4">
         <Link
-          href="/orders"
+          href="/dashboard/orders"
           className="bg-emerald-600 text-white px-4 py-3 rounded-xl font-medium hover:bg-emerald-700 transition"
         >
           سفارش‌های من
