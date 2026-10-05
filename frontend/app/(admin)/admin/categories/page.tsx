@@ -9,7 +9,9 @@ import {
   FolderTree,
   AlertCircle,
   CheckCircle2,
+  Loader2,
 } from "lucide-react";
+import api from "@/lib/api"; // نمونه سفارشی اکسیوس شما
 
 interface Category {
   id: number;
@@ -27,8 +29,6 @@ interface Brand {
   productsCount: number;
 }
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || "http://localhost:5079";
-
 export default function CategoriesAndBrandsPage() {
   const [activeTab, setActiveTab] = useState<"categories" | "brands">(
     "categories",
@@ -45,32 +45,27 @@ export default function CategoriesAndBrandsPage() {
   const [newBrandCountry, setNewBrandCountry] = useState("");
 
   const [loading, setLoading] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [success, setSuccess] = useState<string | null>(null);
 
-  const token =
-    typeof window !== "undefined" ? localStorage.getItem("token") : null;
-
-  // بارگذاری داده‌ها
+  // دریافت اطلاعات اولیه (دسته‌ها و برندها)
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
       const [catsRes, brandsRes] = await Promise.all([
-        fetch(`${API_BASE_URL}/categories`),
-        fetch(`${API_BASE_URL}/brands`),
+        api.get<Category[]>("/categories"),
+        api.get<Brand[]>("/brands"),
       ]);
 
-      if (catsRes.ok) {
-        const catsData = await catsRes.json();
-        setCategories(Array.isArray(catsData) ? catsData : []);
-      }
-      if (brandsRes.ok) {
-        const brandsData = await brandsRes.json();
-        setBrands(Array.isArray(brandsData) ? brandsData : []);
-      }
-    } catch (err) {
-      setError("خطا در برقراری ارتباط با سرور");
+      setCategories(Array.isArray(catsRes.data) ? catsRes.data : []);
+      setBrands(Array.isArray(brandsRes.data) ? brandsRes.data : []);
+    } catch (err: any) {
+      setError(
+        err.response?.data?.message ||
+          "خطا در دریافت اطلاعات دسته‌بندی و برندها",
+      );
     } finally {
       setLoading(false);
     }
@@ -90,30 +85,22 @@ export default function CategoriesAndBrandsPage() {
     e.preventDefault();
     if (!newCatName.trim()) return;
 
+    setSubmitting(true);
+    setError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/categories`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: newCatName.trim(),
-          parentId: newCatParentId ? parseInt(newCatParentId) : null,
-        }),
+      await api.post("/categories", {
+        name: newCatName.trim(),
+        parentId: newCatParentId ? parseInt(newCatParentId) : null,
       });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "خطا در افزودن دسته‌بندی");
-      }
 
       setNewCatName("");
       setNewCatParentId("");
       showSuccessMsg("دسته‌بندی با موفقیت افزوده شد.");
       fetchData();
     } catch (err: any) {
-      setError(err.message);
+      setError(err.response?.data?.message || "خطا در افزودن دسته‌بندی");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -121,21 +108,15 @@ export default function CategoriesAndBrandsPage() {
   const handleDeleteCategory = async (id: number) => {
     if (!confirm("آیا از حذف این دسته‌بندی اطمینان دارید؟")) return;
 
+    setError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/categories/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "امکان حذف دسته‌بندی وجود ندارد.");
-      }
-
+      await api.delete(`/categories/${id}`);
       showSuccessMsg("دسته‌بندی حذف شد.");
       fetchData();
     } catch (err: any) {
-      setError(err.message);
+      setError(
+        err.response?.data?.message || "امکان حذف این دسته‌بندی وجود ندارد.",
+      );
     }
   };
 
@@ -144,30 +125,22 @@ export default function CategoriesAndBrandsPage() {
     e.preventDefault();
     if (!newBrandName.trim()) return;
 
+    setSubmitting(true);
+    setError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/brands`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({
-          name: newBrandName.trim(),
-          country: newBrandCountry.trim() || null,
-        }),
+      await api.post("/brands", {
+        name: newBrandName.trim(),
+        country: newBrandCountry.trim() || null,
       });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "خطا در افزودن برند");
-      }
 
       setNewBrandName("");
       setNewBrandCountry("");
       showSuccessMsg("برند با موفقیت افزوده شد.");
       fetchData();
     } catch (err: any) {
-      setError(err.message);
+      setError(err.response?.data?.message || "خطا در افزودن برند");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -175,21 +148,13 @@ export default function CategoriesAndBrandsPage() {
   const handleDeleteBrand = async (id: number) => {
     if (!confirm("آیا از حذف این برند اطمینان دارید؟")) return;
 
+    setError(null);
     try {
-      const res = await fetch(`${API_BASE_URL}/brands/${id}`, {
-        method: "DELETE",
-        headers: { Authorization: `Bearer ${token}` },
-      });
-
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.message || "امکان حذف برند وجود ندارد.");
-      }
-
+      await api.delete(`/brands/${id}`);
       showSuccessMsg("برند حذف شد.");
       fetchData();
     } catch (err: any) {
-      setError(err.message);
+      setError(err.response?.data?.message || "امکان حذف این برند وجود ندارد.");
     }
   };
 
@@ -299,10 +264,17 @@ export default function CategoriesAndBrandsPage() {
 
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 rounded-xl transition duration-200 text-sm shadow-sm"
+                disabled={submitting}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 rounded-xl transition duration-200 text-sm shadow-sm flex items-center justify-center gap-2"
               >
-                ثبت دسته‌بندی
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    در حال ثبت...
+                  </>
+                ) : (
+                  "ثبت دسته‌بندی"
+                )}
               </button>
             </form>
           </div>
@@ -312,7 +284,7 @@ export default function CategoriesAndBrandsPage() {
             <h2 className="text-lg font-bold text-gray-800 mb-4">
               لیست دسته‌بندی‌ها
             </h2>
-            {loading && categories.length === 0 ? (
+            {loading ? (
               <p className="text-gray-400 text-sm">در حال بارگذاری...</p>
             ) : categories.length === 0 ? (
               <p className="text-gray-400 text-sm">
@@ -395,10 +367,17 @@ export default function CategoriesAndBrandsPage() {
 
               <button
                 type="submit"
-                disabled={loading}
-                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 rounded-xl transition duration-200 text-sm shadow-sm"
+                disabled={submitting}
+                className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-medium py-2.5 rounded-xl transition duration-200 text-sm shadow-sm flex items-center justify-center gap-2"
               >
-                ثبت برند
+                {submitting ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    در حال ثبت...
+                  </>
+                ) : (
+                  "ثبت برند"
+                )}
               </button>
             </form>
           </div>
@@ -408,7 +387,7 @@ export default function CategoriesAndBrandsPage() {
             <h2 className="text-lg font-bold text-gray-800 mb-4">
               لیست برندها
             </h2>
-            {loading && brands.length === 0 ? (
+            {loading ? (
               <p className="text-gray-400 text-sm">در حال بارگذاری...</p>
             ) : brands.length === 0 ? (
               <p className="text-gray-400 text-sm">هنوز برندی ثبت نشده است.</p>

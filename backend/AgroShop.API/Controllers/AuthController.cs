@@ -25,7 +25,6 @@ public class AuthController : ControllerBase
     [HttpPost("register")]
     public async Task<IActionResult> Register([FromBody] RegisterDto dto)
     {
-        // بررسی تکراری نبودن ایمیل
         var emailExists = await _userManager.FindByEmailAsync(dto.Email);
         if (emailExists != null)
             return BadRequest(new { message = "این ایمیل قبلاً در سیستم ثبت شده است." });
@@ -47,20 +46,18 @@ public class AuthController : ControllerBase
             return BadRequest(result.Errors.Select(e => e.Description));
         }
 
-        // انتساب پیش‌فرض نقش مشتری
         await _userManager.AddToRoleAsync(user, UserRoles.Customer);
 
         var token = await _tokenService.CreateTokenAsync(user);
 
-        return Ok(new AuthResponseDto
+        return Ok(new
         {
-            Token = token,
-            User = new UserDto
+            user = new UserDto
             {
                 Id = user.Id,
                 FullName = user.FullName,
-                Email = user.Email,
-                PhoneNumber = user.PhoneNumber,
+                Email = user.Email ?? string.Empty,
+                PhoneNumber = user.PhoneNumber ?? string.Empty,
                 City = user.City,
                 Address = user.Address,
                 Role = UserRoles.Customer
@@ -76,8 +73,9 @@ public class AuthController : ControllerBase
             return Unauthorized(new { message = "ایمیل یا رمز عبور اشتباه است." });
 
         var roles = await _userManager.GetRolesAsync(user);
-        // اگر کاربر در نقش Admin است اولویت با Admin باشد
-        var mainRole = roles.Contains(UserRoles.Admin) ? UserRoles.Admin : (roles.FirstOrDefault() ?? UserRoles.Customer);
+        var mainRole = roles.Contains(UserRoles.Admin)
+            ? UserRoles.Admin
+            : (roles.FirstOrDefault() ?? UserRoles.Customer);
 
         var token = await _tokenService.CreateTokenAsync(user);
 
@@ -92,22 +90,11 @@ public class AuthController : ControllerBase
             Path = "/"
         };
 
-        var roleCookieOptions = new CookieOptions
-        {
-            HttpOnly = false, // اجازه خواندن به جاوااسکریپت و کلاینت
-            Secure = isHttps,
-            SameSite = isHttps ? SameSiteMode.None : SameSiteMode.Lax,
-            Expires = DateTimeOffset.UtcNow.AddDays(7),
-            Path = "/"
-        };
-
         Response.Cookies.Append("agro_token", token, tokenCookieOptions);
-        Response.Cookies.Append("agro_role", mainRole, roleCookieOptions);
 
-        return Ok(new AuthResponseDto
+        return Ok(new
         {
-            Token = token,
-            User = new UserDto
+            user = new UserDto
             {
                 Id = user.Id,
                 FullName = user.FullName,
@@ -119,8 +106,6 @@ public class AuthController : ControllerBase
             }
         });
     }
-
-
 
     [Authorize]
     [HttpGet("me")]
@@ -144,24 +129,25 @@ public class AuthController : ControllerBase
             PhoneNumber = user.PhoneNumber ?? string.Empty,
             City = user.City,
             Address = user.Address,
-            Role = roles.FirstOrDefault() ?? UserRoles.Customer
+            Role = roles.Contains(UserRoles.Admin)
+                ? UserRoles.Admin
+                : (roles.FirstOrDefault() ?? UserRoles.Customer)
         });
     }
 
-    // POST: api/auth/logout
     [HttpPost("logout")]
     public IActionResult Logout()
     {
-        // حذف کوکی توکن
-        Response.Cookies.Delete("token", new CookieOptions
+        var isHttps = Request.IsHttps;
+
+        Response.Cookies.Delete("agro_token", new CookieOptions
         {
             HttpOnly = true,
-            Secure = true, // در محیط پروداکشن
-            SameSite = SameSiteMode.Lax,
+            Secure = isHttps,
+            SameSite = isHttps ? SameSiteMode.None : SameSiteMode.Lax,
             Path = "/"
         });
 
-        return Ok(new { message = "با موفقیت خارج شدید." });
+        return Ok(new { message = "با موفقیت خارج شدید" });
     }
-
 }

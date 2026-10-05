@@ -2,6 +2,7 @@
 
 import React, { useEffect, useState } from "react";
 import Link from "next/link";
+import api from "@/lib/api";
 import {
   PlusCircle,
   Edit3,
@@ -38,54 +39,15 @@ export default function AdminProductsPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [deletingId, setDeletingId] = useState<number | null>(null);
 
-  // تابع کمکی برای گرفتن هدرها (در صورت وجود توکن در استوریج ارسال می‌شود)
-  const getAuthHeaders = (): HeadersInit => {
-    const token =
-      typeof window !== "undefined"
-        ? localStorage.getItem("token") || localStorage.getItem("accessToken")
-        : null;
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-
-    if (token) {
-      headers["Authorization"] = token.startsWith("Bearer ")
-        ? token
-        : `Bearer ${token}`;
-    }
-
-    return headers;
-  };
-
-  // دریافت لیست محصولات از بک‌اند
+  // دریافت لیست محصولات از بک‌اند (کوکی HttpOnly به صورت خودکار ارسال می‌شود)
   const fetchProducts = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      // ارسال درخواست با فعال‌سازی کوکی‌ها (credentials: "include")
-      const res = await fetch(`${API_BASE_URL}/products?pageSize=100`, {
-        method: "GET",
-        headers: getAuthHeaders(),
-        credentials: "include", // 👈 این خط مشکل کوکی و ۴۰۱ را حل می‌کند
-      });
+      const res = await api.get("/products?pageSize=100");
+      const resData = res.data;
 
-      if (!res.ok) {
-        if (res.status === 401) {
-          throw new Error(
-            "نشست کاربری شما منقضی شده است؛ لطفاً مجدداً وارد شوید.",
-          );
-        }
-        if (res.status === 403) {
-          throw new Error("شما دسترسی ادمین برای مشاهده این بخش را ندارید.");
-        }
-        throw new Error("خطا در دریافت لیست محصولات");
-      }
-
-      const resData = await res.json();
-
-      // استخراج داده‌ها (سازگار با فرمت‌های مختلف خروجی API)
       const items = Array.isArray(resData?.data?.items)
         ? resData.data.items
         : Array.isArray(resData?.data)
@@ -98,7 +60,13 @@ export default function AdminProductsPage() {
 
       setProducts(items);
     } catch (err: any) {
-      setError(err.message || "خطا در برقراری ارتباط با سرور");
+      if (err.response?.status === 401) {
+        setError("نشست کاربری شما منقضی شده است؛ لطفاً مجدداً وارد شوید.");
+      } else if (err.response?.status === 403) {
+        setError("شما دسترسی ادمین برای مشاهده این بخش را ندارید.");
+      } else {
+        setError(err.response?.data?.message || "خطا در دریافت لیست محصولات");
+      }
     } finally {
       setLoading(false);
     }
@@ -121,24 +89,15 @@ export default function AdminProductsPage() {
     setError(null);
 
     try {
-      const res = await fetch(`${API_BASE_URL}/products/${id}`, {
-        method: "DELETE",
-        headers: getAuthHeaders(),
-        credentials: "include", // 👈 برای درخواست حذف هم کوکی ارسال می‌شود
-      });
-
-      if (!res.ok) {
-        if (res.status === 401) {
-          throw new Error("نشست شما منقضی شده است. لطفاً مجدداً وارد شوید.");
-        }
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.message || "خطا در حذف محصول");
-      }
-
+      await api.delete(`/products/${id}`);
       showSuccess("محصول با موفقیت حذف شد.");
       setProducts((prev) => prev.filter((p) => p.id !== id));
     } catch (err: any) {
-      setError(err.message || "خطا در حذف محصول");
+      if (err.response?.status === 401) {
+        setError("نشست شما منقضی شده است. لطفاً مجدداً وارد شوید.");
+      } else {
+        setError(err.response?.data?.message || "خطا در حذف محصول");
+      }
     } finally {
       setDeletingId(null);
     }

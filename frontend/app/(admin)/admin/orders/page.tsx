@@ -1,4 +1,7 @@
-import { cookies } from "next/headers";
+"use client";
+
+import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import {
   Table,
   TableBody,
@@ -8,109 +11,165 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
-import Link from "next/link";
+import { Loader2, AlertCircle } from "lucide-react";
+import api from "@/lib/api";
 
-async function getOrders() {
-  try {
-    const cookieStore = await cookies();
-    const token = cookieStore.get("agro_token")?.value;
-    const apiUrl =
-      process.env.NEXT_PUBLIC_API_URL || "http://localhost:5079/api";
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-    };
-
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
-    const res = await fetch(`${apiUrl}/orders`, {
-      headers,
-      cache: "no-store",
-    });
-    console.log(res);
-    if (!res.ok) {
-      console.error("خطا در پاسخ سفارشات:", res.status);
-      return [];
-    }
-
-    const data = await res.json();
-    if (Array.isArray(data)) return data;
-    if (Array.isArray(data?.items)) return data.items;
-    if (Array.isArray(data?.data)) return data.data;
-
-    return [];
-  } catch (error) {
-    console.error("خطا در واکشی سفارشات:", error);
-    return [];
-  }
+interface Order {
+  id: number;
+  orderNumber?: string;
+  customerName?: string;
+  user?: {
+    fullName?: string;
+    userName?: string;
+  };
+  createdAt?: string;
+  totalAmount?: number;
+  status: string | number;
 }
 
-// ⚠️ حتماً باید export default باشد
-export default async function AdminOrdersPage() {
-  const orders = await getOrders();
+export default function AdminOrdersPage() {
+  const [orders, setOrders] = useState<Order[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // واکشی سفارشات با api (Axios)
+  const fetchOrders = async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await api.get("/orders");
+      const data = res.data;
+
+      if (Array.isArray(data)) {
+        setOrders(data);
+      } else if (Array.isArray(data?.items)) {
+        setOrders(data.items);
+      } else if (Array.isArray(data?.data)) {
+        setOrders(data.data);
+      } else {
+        setOrders([]);
+      }
+    } catch (err: any) {
+      console.error("خطا در واکشی سفارشات:", err);
+      setError(
+        err.response?.data?.message || "خطا در دریافت لیست سفارش‌ها از سرور",
+      );
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchOrders();
+  }, []);
 
   const getStatusBadge = (status: string | number) => {
-    switch (status) {
-      case "Completed":
-      case 2:
-        return (
-          <span className="text-xs px-2 py-1 rounded bg-green-100 text-green-700">
-            تکمیل شده
-          </span>
-        );
-      case "Pending":
+    const normalized =
+      typeof status === "string" ? status.trim().toLowerCase() : status;
+
+    switch (normalized) {
+      // 0: در انتظار پرداخت
       case 0:
+      case "0":
+      case "pending":
         return (
-          <span className="text-xs px-2 py-1 rounded bg-yellow-100 text-yellow-700">
-            در انتظار
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-amber-100 text-amber-800 border border-amber-200">
+            در انتظار پرداخت
           </span>
         );
-      case "Processing":
+
+      // 1: پرداخت شده / در حال پردازش
       case 1:
+      case "1":
+      case "paid":
+      case "processing":
         return (
-          <span className="text-xs px-2 py-1 rounded bg-blue-100 text-blue-700">
-            در حال پردازش
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-blue-100 text-blue-800 border border-blue-200">
+            پرداخت شده
           </span>
         );
-      case "Cancelled":
-      case 3:
+
+      // 2: ارسال شده
+      case 2:
+      case "2":
+      case "shipped":
         return (
-          <span className="text-xs px-2 py-1 rounded bg-red-100 text-red-700">
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-indigo-100 text-indigo-800 border border-indigo-200">
+            ارسال شده
+          </span>
+        );
+
+      // 3: تحویل داده شده (موفق)
+      case 3:
+      case "3":
+      case "delivered":
+      case "completed":
+        return (
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
+            تحویل داده شده
+          </span>
+        );
+
+      // 4: لغو شده
+      case 4:
+      case "4":
+      case "cancelled":
+      case "canceled":
+        return (
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-rose-100 text-rose-800 border border-rose-200">
             لغو شده
           </span>
         );
+
       default:
         return (
-          <span className="text-xs px-2 py-1 rounded bg-gray-100 text-gray-700">
-            {status ?? "نامشخص"}
+          <span className="text-xs font-medium px-2.5 py-1 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
+            {status !== null && status !== undefined
+              ? String(status)
+              : "نامشخص"}
           </span>
         );
     }
   };
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir="rtl">
       <div className="flex justify-between items-center">
-        <h1 className="text-2xl font-bold">مدیریت سفارش‌ها</h1>
+        <h1 className="text-2xl font-bold text-gray-800">مدیریت سفارش‌ها</h1>
       </div>
 
-      <div className="rounded-md border">
+      {/* نمایش خطا در صورت بروز مشکل */}
+      {error && (
+        <div className="p-4 bg-red-50 border border-red-200 text-red-700 rounded-xl flex items-center gap-3 text-sm">
+          <AlertCircle className="w-5 h-5 flex-shrink-0" />
+          <span>{error}</span>
+        </div>
+      )}
+
+      <div className="rounded-xl border bg-white shadow-sm overflow-hidden">
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead>شماره سفارش</TableHead>
-              <TableHead>مشتری</TableHead>
-              <TableHead>تاریخ</TableHead>
-              <TableHead>مبلغ کل (تومان)</TableHead>
-              <TableHead>وضعیت</TableHead>
-              <TableHead className="text-right">عملیات</TableHead>
+              <TableHead className="text-right">شماره سفارش</TableHead>
+              <TableHead className="text-right">مشتری</TableHead>
+              <TableHead className="text-right">تاریخ</TableHead>
+              <TableHead className="text-right">مبلغ کل (تومان)</TableHead>
+              <TableHead className="text-right">وضعیت</TableHead>
+              <TableHead className="text-left">عملیات</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
-            {orders.length > 0 ? (
-              orders.map((order: any) => (
+            {loading ? (
+              <TableRow>
+                <TableCell colSpan={6} className="text-center py-10">
+                  <div className="flex justify-center items-center gap-2 text-gray-500 text-sm">
+                    <Loader2 className="w-5 h-5 animate-spin" />
+                    در حال دریافت سفارش‌ها...
+                  </div>
+                </TableCell>
+              </TableRow>
+            ) : orders.length > 0 ? (
+              orders.map((order) => (
                 <TableRow key={order.id}>
                   <TableCell className="font-mono">
                     {order.orderNumber || `#${order.id}`}
@@ -132,7 +191,7 @@ export default async function AdminOrdersPage() {
                       : "۰"}
                   </TableCell>
                   <TableCell>{getStatusBadge(order.status)}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-left">
                     <Button variant="outline" size="sm" asChild>
                       <Link href={`/admin/orders/${order.id}`}>جزئیات</Link>
                     </Button>
@@ -143,7 +202,7 @@ export default async function AdminOrdersPage() {
               <TableRow>
                 <TableCell
                   colSpan={6}
-                  className="text-center py-8 text-muted-foreground"
+                  className="text-center py-10 text-muted-foreground text-sm"
                 >
                   هیچ سفارشی ثبت نشده است.
                 </TableCell>

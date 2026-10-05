@@ -7,6 +7,7 @@ import Image from "next/image";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { ArrowRight, Loader2, UploadCloud, X } from "lucide-react";
+import api from "@/lib/api";
 
 export default function NewProductPage() {
   const router = useRouter();
@@ -75,28 +76,21 @@ export default function NewProductPage() {
     try {
       let uploadedImageUrls: string[] = [];
 
-      // ۱. ابتدا اگر عکسی انتخاب شده، آپلود انجام می‌شود
+      // ۱. آپلود تصاویر (با api)
       if (selectedFiles.length > 0) {
         const uploadData = new FormData();
         selectedFiles.forEach((file) => {
           uploadData.append("files", file);
         });
 
-        const uploadRes = await fetch(
-          `${process.env.NEXT_PUBLIC_API_URL}/upload/product-images`,
-          {
-            method: "POST",
-            credentials: "include",
-            body: uploadData,
+        // 👈 به جای fetch از api.post استفاده می‌کنیم
+        const uploadRes = await api.post("/upload/product-images", uploadData, {
+          headers: {
+            "Content-Type": "multipart/form-data",
           },
-        );
+        });
 
-        if (!uploadRes.ok) {
-          throw new Error("خطا در آپلود تصاویر");
-        }
-
-        const uploadResult = await uploadRes.json();
-        uploadedImageUrls = uploadResult.urls;
+        uploadedImageUrls = uploadRes.data.urls;
       }
 
       // ۲. آماده‌سازی داده نهایی برای CreateProduct
@@ -115,24 +109,18 @@ export default function NewProductPage() {
         imageUrls: uploadedImageUrls,
       };
 
-      const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL}/products`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-        body: JSON.stringify(payload),
-      });
-
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => null);
-        throw new Error(errorData?.message || "خطا در ثبت اطلاعات محصول");
-      }
+      // 👈 به جای fetch از api.post استفاده می‌کنیم
+      await api.post("/products", payload);
 
       router.push("/admin/products");
       router.refresh();
     } catch (err: any) {
-      setError(err.message || "خطایی رخ داد");
+      // دریافت پیام خطای مناسب از پاسخ سرور
+      const message =
+        err.response?.data?.message ||
+        err.message ||
+        "خطا در ثبت اطلاعات محصول";
+      setError(message);
     } finally {
       setLoading(false);
     }

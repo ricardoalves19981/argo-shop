@@ -2,7 +2,7 @@
 "use client";
 
 import React, { createContext, useContext, useState, useEffect } from "react";
-import Cookies from "js-cookie";
+import api from "@/lib/api";
 
 export interface User {
   id: string;
@@ -11,13 +11,15 @@ export interface User {
   email?: string;
   role?: string;
   roles?: string[];
+  isAdmin?: boolean;
 }
 
 interface AuthContextType {
   user: User | null;
   isLoading: boolean;
   setUser: (user: User | null) => void;
-  login: (token: string, user: User) => void; // 👈 اضافه شد
+  // پشتیبانی از هر دو حالت: login(user) یا login(token, user)
+  login: (userDataOrToken: any, maybeUser?: any) => void;
   logout: () => Promise<void>;
   checkAuth: () => Promise<void>;
 }
@@ -26,41 +28,47 @@ const AuthContext = createContext<AuthContextType>({
   user: null,
   isLoading: true,
   setUser: () => {},
-  login: () => {}, // 👈 مقدار پیش‌فرض
+  login: () => {},
   logout: async () => {},
   checkAuth: async () => {},
 });
+
+// تابع کمکی برای نرمال‌سازی نقش کاربر
+const normalizeUser = (userData: any): User | null => {
+  if (!userData) return null;
+
+  let role = userData.role;
+  if (!role && Array.isArray(userData.roles) && userData.roles.length > 0) {
+    role = userData.roles[0];
+  }
+
+  const isAdmin =
+    role?.toLowerCase() === "admin" ||
+    (Array.isArray(userData.roles) &&
+      userData.roles.some((r: string) => r.toLowerCase() === "admin"));
+
+  return {
+    ...userData,
+    role: role || "Customer",
+    isAdmin: Boolean(isAdmin),
+  };
+};
 
 export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
-  // بررسی وضعیت لاگین هنگام لود اولیه صفحه
   const checkAuth = async () => {
     try {
-      setIsLoading(true);
-      const storedUser = localStorage.getItem("user");
-      if (storedUser) {
-        try {
-          setUser(JSON.parse(storedUser));
-        } catch {}
-      }
-
-      const res = await fetch("http://localhost:5079/api/auth/me", {
-        method: "GET",
-        credentials: "include",
-      });
-
-      if (res.ok) {
-        const data = await res.json();
-        setUser(data);
-        localStorage.setItem("user", JSON.stringify(data));
+      // مرورگر به لطف api (withCredentials: true)، کوکی agro_token را خودکار می‌فرستد
+      const res = await api.get("/auth/me");
+      if (res.data) {
+        setUser(normalizeUser(res.data));
       } else {
         setUser(null);
-        localStorage.removeItem("user");
       }
-    } catch (err) {
-      console.error("خطا در بررسی نشست کاربر:", err);
+    } catch {
+      setUser(null);
     } finally {
       setIsLoading(false);
     }
@@ -70,66 +78,25 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
     checkAuth();
   }, []);
 
-  // متد لاگین جهت ثبت توکن، کوکی‌ها و استیت
-  // src/context/AuthContext.tsx
-
-  const login = (token: string, userData: any) => {
-    setUser(userData);
-    localStorage.setItem("token", token);
-    localStorage.setItem("user", JSON.stringify(userData));
-
-    // استخراج نقش (پوشش تمام حالت‌ها: رشته، آرایه یا حروف کوچک/بزرگ)
-    let userRole = "";
-    if (typeof userData.role === "string") {
-      userRole = userData.role;
-    } else if (Array.isArray(userData.roles) && userData.roles.length > 0) {
-      userRole = userData.roles[0];
-    } else if (Array.isArray(userData.role) && userData.role.length > 0) {
-      userRole = userData.role[0];
-    }
-
-    // ذخیره کوکی‌ها برای استفاده میدل‌ور
-    Cookies.set("agro_token", token, { path: "/", expires: 7 });
-
-    if (userRole) {
-      Cookies.set("agro_role", userRole, { path: "/", expires: 7 });
-    }
+  const login = (userDataOrToken: any, maybeUser?: any) => {
+    // اگر صفحه لاگین دو ورودی فرستاده بود: login(token, user)
+    // یا اگر یک ورودی فرستاده بود: login(user)
+    const targetUser = maybeUser ? maybeUser : userDataOrToken;
+    const normalized = normalizeUser(targetUser);
+    setUser(normalized);
   };
-
-  // src/context/AuthContext.tsx
-
-  // src/context/AuthContext.tsx
 
   const logout = async () => {
     try {
-      // ۱. اطلاع به سرور
-      await fetch("http://localhost:5079/api/auth/logout", {
-        method: "POST",
-        credentials: "include",
-      });
+      await api.post("/auth/logout");
     } catch (err) {
       console.error("خطا در لاگ‌اوت سمت سرور:", err);
     } finally {
-      // ۲. صفر کردن استیت ری‌اکت
       setUser(null);
-
-      // ۳. پاک کردن LocalStorage
-      localStorage.clear();
-
-      // ۴. تابع کمکی برای پاک کردن یک کوکی در تمام دامنه‌ها و مسیرها
-      const expireCookie = (name: string) => {
-        // حذف استاندارد با js-cookie
-        Cookies.remove(name, { path: "/" });
-        Cookies.remove(name);
-
-        // حذف مستقیم با document.cookie برای انواع مسیرها و دامنه‌ها
-        document.cookie = `${name}=; Path=/; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;`;
-        document.cookie = `${name}=; Path=/; Domain=${window.location.hostname}; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;`;
-        document.cookie = `${name}=; Expires=Thu, 01 Jan 1970 00:00:01 GMT; Max-Age=0;`;
-      };
-
-      // اعمال حذف برای تمامی کوکی‌های پروژه
-      ["agro_token", "agro_role", "token", "user"].forEach(expireCookie);
+      if (typeof window !== "undefined") {
+        localStorage.removeItem("token");
+        localStorage.removeItem("user");
+      }
     }
   };
 

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("AgroShop.API")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+338aa8facc6a275782a40d62b0f09719453f8998")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+b64fc346b886f505cd0c08bc6b1a995c66568d90")]
 [assembly: System.Reflection.AssemblyProductAttribute("AgroShop.API")]
 [assembly: System.Reflection.AssemblyTitleAttribute("AgroShop.API")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
